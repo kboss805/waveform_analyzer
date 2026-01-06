@@ -17,6 +17,10 @@ PLOT_TAG = "main_plot"
 Y_AXIS_TAG = "y_axis"
 STATUS_BAR = "status_bar"
 TIME_SPAN_SLIDER = "time_span_slider"
+TIME_SPAN_DEC_BTN = "time_span_dec_btn"
+TIME_SPAN_INPUT = "time_span_input"
+TIME_SPAN_INC_BTN = "time_span_inc_btn"
+TIME_SPAN_GROUP = "time_span_group"
 FREQ_SLIDER = "freq_slider"
 AMP_SLIDER = "amp_slider"
 DUTY_SLIDER = "duty_slider"
@@ -35,9 +39,9 @@ DUTY_GROUP = "duty_group"
 DUTY_LABEL = "duty_label"
 WAVE_TYPE_COMBO = "wave_type_combo"
 ADD_WAVE_BTN = "add_wave_btn"
-EXPORT_FILENAME = "export_filename"
 EXPORT_STATUS = "export_status"
 EXPORT_BTN = "export_btn"
+FILE_DIALOG = "file_dialog"
 WAVEFORM_LIST_GROUP = "waveform_list_group"
 SHOW_GRID_CHECKBOX = "show_grid_checkbox"
 MAX_ENV_CHECKBOX = "max_env_checkbox"
@@ -145,6 +149,10 @@ def update_all_plots() -> None:
     # Set fixed Y-axis limits
     dpg.set_axis_limits(Y_AXIS_TAG, DEFAULT_Y_MIN, DEFAULT_Y_MAX)
 
+    # Set X-axis limits based on time span
+    x_axis = dpg.get_item_children(PLOT_TAG, slot=1)[0]
+    dpg.set_axis_limits(x_axis, 0, app_state.time_span)
+
     update_status_bar()
 
 
@@ -233,6 +241,32 @@ def create_disabled_button_theme():
 def on_time_span_changed(sender, value):
     """Callback for time span slider."""
     app_state.set_time_span(value)
+    update_all_plots()
+
+
+def on_time_span_increment():
+    """Increment time span by step amount."""
+    new_value = min(120.0, app_state.time_span + 0.5)
+    app_state.set_time_span(new_value)
+    dpg.set_value(TIME_SPAN_INPUT, new_value)
+    update_time_span_buttons()
+    update_all_plots()
+
+
+def on_time_span_decrement():
+    """Decrement time span by step amount."""
+    new_value = max(0.5, app_state.time_span - 0.5)
+    app_state.set_time_span(new_value)
+    dpg.set_value(TIME_SPAN_INPUT, new_value)
+    update_time_span_buttons()
+    update_all_plots()
+
+
+def on_time_span_input_changed(sender, value):
+    """Callback for time span text input."""
+    app_state.set_time_span(max(0.5, min(120.0, value)))
+    dpg.set_value(TIME_SPAN_INPUT, app_state.time_span)
+    update_time_span_buttons()
     update_all_plots()
 
 
@@ -383,7 +417,8 @@ def on_reset_view():
     """Reset the plot view to default time span and axis limits."""
     # Reset time span to default
     app_state.set_time_span(DEFAULT_TIME_SPAN)
-    dpg.set_value(TIME_SPAN_SLIDER, DEFAULT_TIME_SPAN)
+    dpg.set_value(TIME_SPAN_INPUT, DEFAULT_TIME_SPAN)
+    update_time_span_buttons()
 
     # Get X axis
     x_axis = dpg.get_item_children(PLOT_TAG, slot=1)[0]
@@ -522,9 +557,61 @@ def on_select_waveform(waveform_id: int):
     update_waveform_list()
 
 
-def on_export():
-    """Callback for export button."""
-    filename = dpg.get_value(EXPORT_FILENAME)
+def on_export_button_clicked():
+    """Callback for export button - shows file dialog."""
+    dpg.show_item(FILE_DIALOG)
+
+
+def on_file_dialog_ok(sender, app_data, user_data):
+    """Callback when file dialog OK is clicked - performs the export."""
+    # app_data contains file path information
+    import os
+
+    # Debug: Print app_data to see what we're getting
+    print("\n=== FILE DIALOG DEBUG ===")
+    print("File dialog app_data keys:", app_data.keys())
+    for key, value in app_data.items():
+        print(f"  {key}: {repr(value)}")
+
+    # Get the selected file path
+    filename = None
+
+    if 'selections' in app_data and app_data['selections']:
+        # selections is a dict of {filename: full_path}
+        filename = list(app_data['selections'].values())[0]
+        print(f"Using selections: {repr(filename)}")
+    elif 'file_path_name' in app_data:
+        filename = app_data['file_path_name']
+        print(f"Using file_path_name: {repr(filename)}")
+    else:
+        # Manual fallback: properly combine path and filename using os.path.join
+        current_path = app_data.get('current_path', '')
+        file_name = app_data.get('file_name', 'waveforms.csv')
+
+        print(f"Fallback values: current_path={repr(current_path)}, file_name={repr(file_name)}")
+
+        # Ensure file_name has .csv extension
+        if not file_name.lower().endswith('.csv'):
+            file_name += '.csv'
+            print(f"Added .csv to file_name: {repr(file_name)}")
+
+        # Use os.path.join which handles separators correctly
+        filename = os.path.join(current_path, file_name)
+        print(f"Using os.path.join result: {repr(filename)}")
+
+    # Ensure the final path has .csv extension (DearPyGui sometimes strips it)
+    if filename and not filename.lower().endswith('.csv'):
+        filename += '.csv'
+        print(f"Added .csv extension to final path: {repr(filename)}")
+
+    # Fix DearPyGui stripping the dot before extension (e.g., "waveformscsv.csv" -> "waveforms.csv")
+    # This happens when user types "waveforms.csv" and DearPyGui strips the dot
+    if filename and filename.lower().endswith('csv.csv'):
+        filename = filename[:-7] + '.csv'  # Remove "csv.csv" and add ".csv"
+        print(f"Fixed duplicate extension pattern: {repr(filename)}")
+
+    print(f"FINAL PATH TO USE: {repr(filename)}")
+    print("=========================\n")
 
     # Collect enabled waveform data
     waveforms_to_export = []
@@ -642,6 +729,18 @@ def update_waveform_list():
                 else:
                     # Add spacer button (invisible) to maintain alignment
                     dpg.add_button(label="", width=30, enabled=False, show=False)
+
+
+def update_time_span_buttons():
+    """Update time span button states based on current value."""
+    global disabled_button_theme
+
+    time_at_min = app_state.time_span <= 0.5
+    time_at_max = app_state.time_span >= 120.0
+    dpg.configure_item(TIME_SPAN_DEC_BTN, enabled=not time_at_min)
+    dpg.configure_item(TIME_SPAN_INC_BTN, enabled=not time_at_max)
+    dpg.bind_item_theme(TIME_SPAN_DEC_BTN, disabled_button_theme if time_at_min else 0)
+    dpg.bind_item_theme(TIME_SPAN_INC_BTN, disabled_button_theme if time_at_max else 0)
 
 
 def update_waveform_parameters():
@@ -786,15 +885,34 @@ def create_ui():
                 dpg.add_text("Display Controls", color=(255, 255, 0))
                 dpg.add_separator()
 
-                dpg.add_slider_float(
-                    label="Time Span (s)",
-                    tag=TIME_SPAN_SLIDER,
-                    default_value=DEFAULT_TIME_SPAN,
-                    min_value=0.1,
-                    max_value=100.0,
-                    callback=on_time_span_changed,
-                    width=200
-                )
+                # Time Span control with +/- buttons
+                dpg.add_text("Time Span (s)")
+                with dpg.group(horizontal=True, tag=TIME_SPAN_GROUP):
+                    dpg.add_input_float(
+                        tag=TIME_SPAN_INPUT,
+                        default_value=DEFAULT_TIME_SPAN,
+                        min_value=0.5,
+                        max_value=120.0,
+                        min_clamped=True,
+                        max_clamped=True,
+                        callback=on_time_span_input_changed,
+                        on_enter=True,
+                        step=0.0,
+                        width=134,
+                        format="%.1f"
+                    )
+                    dpg.add_button(
+                        label="-",
+                        tag=TIME_SPAN_DEC_BTN,
+                        callback=on_time_span_decrement,
+                        width=30
+                    )
+                    dpg.add_button(
+                        label="+",
+                        tag=TIME_SPAN_INC_BTN,
+                        callback=on_time_span_increment,
+                        width=30
+                    )
 
                 dpg.add_checkbox(
                     label="Show Grid",
@@ -968,17 +1086,10 @@ def create_ui():
                 dpg.add_text("Export", color=(255, 255, 0))
                 dpg.add_separator()
 
-                dpg.add_input_text(
-                    label="Filename",
-                    tag=EXPORT_FILENAME,
-                    default_value="waveforms.csv",
-                    width=200
-                )
-
                 dpg.add_button(
                     label="Export to CSV",
                     tag=EXPORT_BTN,
-                    callback=on_export,
+                    callback=on_export_button_clicked,
                     width=-1
                 )
 
@@ -998,11 +1109,28 @@ def create_ui():
         # Status bar
         dpg.add_text("", tag=STATUS_BAR)
 
+    # Create file dialog for export (save mode)
+    # Note: DearPyGui strips dots from default_filename, so we use "waveforms"
+    # and rely on the file extension filter to add ".csv"
+    with dpg.file_dialog(
+        directory_selector=False,
+        show=False,
+        callback=on_file_dialog_ok,
+        tag=FILE_DIALOG,
+        width=700,
+        height=400,
+        default_filename="waveforms",
+        file_count=1,
+        modal=True
+    ):
+        dpg.add_file_extension(".csv", color=(0, 255, 0, 255), custom_text="[CSV]")
+
     # Register mouse handler for splitter
     with dpg.handler_registry():
         dpg.add_mouse_move_handler(callback=lambda: handle_splitter_drag())
 
     # Initialize UI state
+    update_time_span_buttons()
     update_waveform_list()
     update_waveform_parameters()
     update_envelope_controls()

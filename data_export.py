@@ -10,18 +10,26 @@ from datetime import datetime
 import re
 
 
-def sanitize_filename(filename: str) -> str:
+def sanitize_filename(filepath: str) -> str:
     """
-    Sanitize filename by removing invalid characters and ensuring .csv extension.
+    Sanitize filepath by removing invalid characters from the filename portion
+    and ensuring .csv extension.
 
     Args:
-        filename: Original filename
+        filepath: Original filepath (can be full path or just filename)
 
     Returns:
-        Sanitized filename with .csv extension
+        Sanitized filepath with .csv extension
     """
-    # Remove invalid characters
-    filename = re.sub(r'[<>:"/\\|?*]', '', filename)
+    import os
+
+    # Split into directory and filename
+    directory = os.path.dirname(filepath)
+    filename = os.path.basename(filepath)
+
+    # Remove invalid characters from filename only (not path separators)
+    # These are invalid in Windows filenames: < > : " | ? *
+    filename = re.sub(r'[<>:"|?*]', '', filename)
 
     # Ensure .csv extension
     if not filename.lower().endswith('.csv'):
@@ -31,6 +39,9 @@ def sanitize_filename(filename: str) -> str:
     if filename == '.csv':
         filename = 'waveforms.csv'
 
+    # Reconstruct full path if directory was provided
+    if directory:
+        return os.path.join(directory, filename)
     return filename
 
 

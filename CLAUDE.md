@@ -74,7 +74,7 @@ User Input → Callback → Update State → Regenerate Waveforms → Update UI 
 - ✅ Frequency: 1-100 Hz, slider step 0.1 Hz
 - ✅ Amplitude: 0-10, slider step 0.1
 - ✅ Duty Cycle: 1-100%, slider step 1% (only for Square waves)
-- ✅ Time Span: 0.1-100 seconds, slider step 0.1s
+- ✅ Time Span: 0.1-120 seconds, slider step 0.5s
 - ✅ All plots update immediately on parameter change (<100ms latency)
 - ✅ Current values displayed clearly next to each slider
 

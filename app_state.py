@@ -196,9 +196,9 @@ class AppState:
         Set time span with bounds checking.
 
         Args:
-            time_span: Time span in seconds (0.1-100.0)
+            time_span: Time span in seconds (0.5-120.0)
         """
-        self.time_span = max(0.1, min(100.0, time_span))
+        self.time_span = max(0.5, min(120.0, time_span))
 
 
 # Global singleton instance
