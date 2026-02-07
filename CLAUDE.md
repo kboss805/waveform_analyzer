@@ -1,6 +1,6 @@
-# Real-Time Waveform Visualizer
+# Waveform Analyzer
 
-**Version:** 1.0  
+**Version:** 0.9.1
 **Target Users:** Engineers visualizing up to 5 independent waveforms with envelope analysis  
 **Tech Stack:** Python 3.11+, NumPy 1.24+, SciPy 1.11+, CustomTkinter 5.2+, matplotlib 3.8+
 
@@ -87,8 +87,8 @@ User Input → Callback → Update State → Regenerate Waveforms → Update UI 
 **Acceptance Criteria:**
 - ✅ Checkbox control "Show Max Envelope" in Global Controls
 - ✅ Checkbox control "Show Min Envelope" in Global Controls
-- ✅ MaxEnvelope displays as red dashed line when enabled
-- ✅ MinEnvelope displays as blue dashed line when enabled
+- ✅ MaxEnvelope displays as green (#00FF00) glowing line when enabled
+- ✅ MinEnvelope displays as red (#FF0000) glowing line when enabled
 - ✅ Both can be enabled simultaneously
 - ✅ Envelope waveforms update in real-time (<100ms) when:
   - Any waveform parameter changes
@@ -127,9 +127,18 @@ User Input → Callback → Update State → Regenerate Waveforms → Update UI 
 **Limits:** 5 waveforms max, 1 waveform minimum
 
 ### Envelope Analysis
-- **Max Envelope:** Red (#FF0000) dashed line - highest amplitude at each time sample
-- **Min Envelope:** Blue (#0000FF) dashed line - lowest amplitude at each time sample
+- **Max Envelope:** Green (#00FF00) glowing line - highest amplitude at each time sample
+- **Min Envelope:** Red (#FF0000) glowing line - lowest amplitude at each time sample
+- **Glow Effect:** Layered lines (8px/6px/4px at 0.1/0.2/0.3 alpha + 2px core at full alpha)
+- **Auto-hide:** Source waveforms are automatically hidden when any envelope is enabled
 - **Behavior:** Disabled when ≤1 waveform, calculates from enabled waveforms only, real-time updates
+
+### Waveform Renaming
+- **Right-click** any waveform button to open context menu with "Rename..." option
+- **Tooltip** on hover: "Right-click to change waveform name"
+- Custom names propagate to plot legend and CSV export
+- Duplicate names are rejected with a re-prompt
+- Empty name reverts to default ("Waveform N")
 
 ### Export Capability
 - **Format:** CSV with time column + amplitude columns
@@ -147,9 +156,11 @@ User Input → Callback → Update State → Regenerate Waveforms → Update UI 
     "wave_type": str,       # "sine" | "square" | "sawtooth" | "triangle"
     "frequency": float,     # 0.1-100.0 Hz
     "amplitude": float,     # 0.0-10.0
+    "offset": float,        # 0.0-10.0
     "duty_cycle": float,    # 1.0-100.0% (Square only)
     "color": tuple,         # (R, G, B) auto-assigned
-    "enabled": bool         # Show/hide waveform
+    "enabled": bool,        # Show/hide waveform
+    "name": str             # Custom display name (empty = default)
 }
 ```
 
@@ -160,37 +171,39 @@ User Input → Callback → Update State → Regenerate Waveforms → Update UI 
     "sample_rate": int,              # 1000 (fixed)
     "active_waveform_index": int,    # Which waveform controls are shown
     "show_max_envelope": bool,       # MaxEnvelope visibility
-    "show_min_envelope": bool        # MinEnvelope visibility
+    "show_min_envelope": bool,       # MinEnvelope visibility
+    "hide_src_wfs": bool             # Auto-set when envelopes enabled
 }
 ```
 
 ### Initial State (Startup)
-- 1 Sine waveform: 1.0 Hz, 5.0 amplitude, Yellow, enabled
+- 1 Sine waveform: 0.2 Hz, 2.0 amplitude, 8.0 offset, Yellow, enabled
 - duration: 10.0s, Envelopes: OFF
 
 ---
 
 ## UI Specification
 
-### Layout (1200x900 default, 1000x700 minimum, Dark Theme #1a1a1a)
+### Layout (1200x900 default, 1000x800 minimum, Dark Theme #1a1a1a)
+
+**Menu Bar:** Help > About... (CTkMenuBar, fully dark-themed)
 
 **Sidebar (330px, scrollable):**
 ```
 ┌─ Waveforms ──────────────────┐
 │ [+ Add Waveform]             │  ← Max 5
 │ [Waveform 1    ] [ON] [X]    │  ← Click=select, ON/OFF=toggle, X=remove
-│ [Waveform 2    ] [OFF][X]    │
+│ [Waveform 2    ] [OFF][X]    │     Right-click=rename, hover=tooltip
 ├─ Waveform Parameters ────────┤  ← Shows selected waveform
 │ Type: [Sine ▼]               │
 │ Wave Duration: [input][-][+] │  ← 0.5-120 seconds
+│ Offset: [input] [-] [+]      │
 │ Frequency: [input] [-] [+]   │
 │ Amplitude: [input] [-] [+]   │
-│ Offset: [input] [-] [+]      │
 │ Duty Cycle: (hidden for Sine)│
 ├─ Advanced ───────────────────┤
 │ ☐ Show Max Envelope          │  ← Disabled when ≤1 waveform
-│ ☐ Show Min Envelope          │
-│ ☐ Hide Source Waveforms      │  ← Disabled unless envelope shown
+│ ☐ Show Min Envelope          │  ← Source waveforms auto-hide when enabled
 ├─ Export ─────────────────────┤
 │ [Export to CSV]              │  ← Opens native OS file dialog
 │ Status: Ready                │
@@ -201,6 +214,8 @@ User Input → Callback → Update State → Regenerate Waveforms → Update UI 
 
 **Status Bar:** `Waveforms: X/5`
 
+**About Dialog:** App name, version (APP_VERSION constant), description, author info
+
 ### Color Palette (Auto-assigned)
 | Waveform | Color | RGB |
 |----------|-------|-----|
@@ -209,8 +224,8 @@ User Input → Callback → Update State → Regenerate Waveforms → Update UI 
 | 3 | Magenta | (255, 0, 255) |
 | 4 | Green | (0, 255, 0) |
 | 5 | Orange | (255, 165, 0) |
-| MaxEnvelope | Red (dashed) | (255, 0, 0) |
-| MinEnvelope | Blue (dashed) | (0, 0, 255) |
+| MaxEnvelope | Green (glow) | #00FF00 |
+| MinEnvelope | Red (glow) | #FF0000 |
 
 ### Plot Styling
 - Background: #1a1a1a, Axes: #666666, Grid: #666666 @ 20% opacity
@@ -298,14 +313,15 @@ filename = filedialog.asksaveasfilename(
 ### CSV Export Format
 ```csv
 # Exported: 2025-01-03 14:30:00
-# Waveform_1: Sine, 5.0 Hz, 5.0 amplitude
-# Waveform_2: Square, 10.0 Hz, 8.0 amplitude, 50% duty cycle
+# MySignal: Sine, 0.2 Hz, 10.0 amp
+# Waveform_2: Square, 0.2 Hz, 10.0 amp, 50.0% duty cycle
 # Max_Envelope: Computed from 2 waveforms
-# Sample Rate: 1000 S/s, Duration: 1.0s
-Time (s),Waveform_1_Sine,Waveform_2_Square,Max_Envelope
-0.000000,0.000000,8.000000,8.000000
-0.001000,0.031411,8.000000,8.000000
+# Sample Rate: 1000 S/s, Duration: 10.0s
+Time (s),MySignal,Waveform_2,Max_Envelope
+0.000000,8.000000,10.000000,10.000000
+0.001000,8.001257,10.000000,10.000000
 ```
+Note: Custom waveform names (via rename) are used for column headers. Spaces replaced with underscores.
 
 ---
 
@@ -333,7 +349,7 @@ Time (s),Waveform_1_Sine,Waveform_2_Square,Max_Envelope
 
 ### Pre-Commit Checklist
 - [ ] All 5 wave types render correctly
-- [ ] Edge cases: min/max frequency (1 Hz, 100 Hz), min/max amplitude (0, 10)
+- [ ] Edge cases: min/max frequency (0.1 Hz, 100 Hz), min/max amplitude (0, 10)
 - [ ] Duty cycle: 1%, 50%, 100% for Square
 - [ ] Wave duration: 0.5s, 10s, 120s
 - [ ] Envelopes: Test with 2, 3, 5 waveforms (same phase, opposite phase)
@@ -345,11 +361,14 @@ Time (s),Waveform_1_Sine,Waveform_2_Square,Max_Envelope
 - [ ] FPS >30 during parameter changes
 
 ### Manual Test Scenarios
-1. **Startup:** Should show 1 Sine wave, 1 Hz, 5.0 amplitude
+1. **Startup:** Should show 1 Sine wave, 0.2 Hz, 2.0 amplitude, 8.0 offset
 2. **Add to max:** Add 4 more waveforms, verify limit enforcement
 3. **Remove to min:** Remove to 1 waveform, verify limit enforcement
 4. **Envelope edge:** Enable max/min with only 1 wave (should be disabled)
 5. **Performance:** Change frequency rapidly, verify smooth updates
+6. **Rename:** Right-click waveform, enter custom name, verify in list/legend/CSV
+7. **Duplicate name:** Try renaming to an existing name, verify rejection
+8. **Auto-hide:** Enable envelope, verify source waveforms hidden automatically
 
 ---
 

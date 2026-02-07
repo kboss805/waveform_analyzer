@@ -1,5 +1,5 @@
 """
-UI components for the Real-Time Waveform Visualizer.
+UI components for the Waveform Analyzer.
 
 This module contains all CustomTkinter UI creation and callback logic.
 """
@@ -7,7 +7,8 @@ This module contains all CustomTkinter UI creation and callback logic.
 import os
 import sys
 import customtkinter as ctk
-from tkinter import filedialog
+from tkinter import filedialog, Menu, Toplevel, Label
+from CTkMenuBar import CTkMenuBar, CustomDropdownMenu
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
@@ -28,6 +29,9 @@ from data_export import export_to_csv, prep_wf_for_export
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
+# Application version
+APP_VERSION = "0.9.1"
+
 # Color constants
 SECTION_HEADER_COLOR = "#FFFF00"  # Yellow
 ENABLED_TEXT_COLOR = "#FFFFFF"
@@ -41,23 +45,30 @@ class WaveformApp(ctk.CTk):
         super().__init__()
 
         # Window configuration
-        self.title("Waveform Generator/Analyzer")
+        self.title("Waveform Analyzer")
         self.geometry("1200x900")
         self.minsize(1000, 800)
 
         # Set window icon
         self._set_icon()
 
-        # Configure grid weights
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-
         # Store widget references
         self.wf_buttons = []
         self.toggle_buttons = []
         self.remove_buttons = []
+        self._tooltip = None
 
         # Create UI components
+        self._create_menu_bar()
+
+        # Create content frame to hold grid-based layout (menu bar uses pack)
+        self.content_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.content_frame.pack(fill="both", expand=True)
+
+        # Configure grid weights for content frame
+        self.content_frame.grid_columnconfigure(1, weight=1)
+        self.content_frame.grid_rowconfigure(0, weight=1)
+
         self._create_sidebar()
         self._create_plot_area()
         self._create_status_bar()
@@ -82,10 +93,101 @@ class WaveformApp(ctk.CTk):
         if os.path.exists(icon_path):
             self.iconbitmap(icon_path)
 
+    def _create_menu_bar(self):
+        """Create the application menu bar using CTkMenuBar."""
+        self.menu_bar = CTkMenuBar(
+            master=self,
+            bg_color=["#2b2b2b", "#1a1a1a"],
+            height=28,
+            padx=5,
+            pady=2
+        )
+
+        # Help menu
+        help_btn = self.menu_bar.add_cascade(
+            text="Help",
+            text_color=["#ffffff", "#ffffff"],
+            fg_color="transparent"
+        )
+        help_dropdown = CustomDropdownMenu(
+            widget=help_btn,
+            width=150,
+            height=30,
+            bg_color=["#2b2b2b", "#2b2b2b"],
+            border_color=["#444444", "#444444"],
+            text_color=["#ffffff", "#ffffff"],
+            hover_color=["#3d3d6b", "#3d3d6b"],
+            corner_radius=6
+        )
+        help_dropdown.add_option(
+            option="About...",
+            command=self._show_about_dialog
+        )
+
+    def _show_about_dialog(self):
+        """Show the About dialog."""
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("About Waveform Analyzer")
+        dialog.geometry("400x310")
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.grab_set()
+
+        # Set dialog icon
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+        icon_path = os.path.join(base_path, "icon.ico")
+        if os.path.exists(icon_path):
+            dialog.after(200, lambda: dialog.iconbitmap(icon_path))
+
+        # Center the dialog on the main window
+        dialog.update_idletasks()
+        x = self.winfo_x() + (self.winfo_width() - 400) // 2
+        y = self.winfo_y() + (self.winfo_height() - 310) // 2
+        dialog.geometry(f"+{x}+{y}")
+
+        # Content frame
+        content = ctk.CTkFrame(dialog, fg_color="transparent")
+        content.pack(expand=True, fill="both", padx=20, pady=20)
+
+        # Title
+        ctk.CTkLabel(
+            content, text="Waveform Analyzer",
+            font=ctk.CTkFont(size=18, weight="bold")
+        ).pack(pady=(0, 10))
+
+        # Version
+        ctk.CTkLabel(content, text=f"Version {APP_VERSION}").pack()
+
+        # Description
+        ctk.CTkLabel(
+            content,
+            text="Waveform Analyzer is a tool to help engineers\nand scientists visualize different waveforms\nin real-time.",
+            justify="center"
+        ).pack(pady=15)
+
+        # Author
+        ctk.CTkLabel(
+            content, text="Kevin Bossoletti",
+            text_color="#aaaaaa"
+        ).pack(pady=(0, 0))
+        ctk.CTkLabel(
+            content, text="kevin.bossoletti@gmail.com",
+            text_color="#888888", height=20
+        ).pack(pady=(0, 0))
+
+        # Close button
+        ctk.CTkButton(
+            content, text="OK", width=80,
+            command=dialog.destroy
+        ).pack(pady=(20, 0))
+
     def _create_sidebar(self):
         """Create the sidebar with all controls."""
         # Sidebar frame with scrolling
-        self.sidebar = ctk.CTkScrollableFrame(self, width=330)
+        self.sidebar = ctk.CTkScrollableFrame(self.content_frame, width=330)
         self.sidebar.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=(10, 0))
 
         # === Waveforms ===
@@ -146,7 +248,7 @@ class WaveformApp(ctk.CTk):
 
         self.offset_entry = ctk.CTkEntry(self.offset_frame, width=120)
         self.offset_entry.pack(side="left", padx=(0, 5))
-        self.offset_entry.insert(0, "5.0")
+        self.offset_entry.insert(0, "8.0")
         self.offset_entry.bind("<Return>", self._on_offset_enter)
         self.offset_entry.bind("<FocusOut>", self._on_offset_enter)
 
@@ -192,7 +294,7 @@ class WaveformApp(ctk.CTk):
 
         self.amp_entry = ctk.CTkEntry(self.amp_frame, width=120)
         self.amp_entry.pack(side="left", padx=(0, 5))
-        self.amp_entry.insert(0, "5.0")
+        self.amp_entry.insert(0, "2.0")
         self.amp_entry.bind("<Return>", self._on_amp_enter)
         self.amp_entry.bind("<FocusOut>", self._on_amp_enter)
 
@@ -279,7 +381,7 @@ class WaveformApp(ctk.CTk):
     def _create_plot_area(self):
         """Create the matplotlib plot area."""
         # Plot container
-        self.plot_frame = ctk.CTkFrame(self)
+        self.plot_frame = ctk.CTkFrame(self.content_frame)
         self.plot_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=(10, 0))
         self.plot_frame.grid_columnconfigure(0, weight=1)
         self.plot_frame.grid_rowconfigure(0, weight=1)
@@ -308,7 +410,7 @@ class WaveformApp(ctk.CTk):
     def _create_status_bar(self):
         """Create the status bar."""
         self.status_bar = ctk.CTkLabel(
-            self, text="Waveforms: 1/5",
+            self.content_frame, text="Waveforms: 1/5",
             anchor="w"
         )
         self.status_bar.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(5, 10))
@@ -328,6 +430,80 @@ class WaveformApp(ctk.CTk):
         header.pack(anchor="w")
 
     # === Callback Methods ===
+
+    def _is_duplicate_name(self, name: str, exclude_id: int) -> bool:
+        """Check if a waveform name is already in use."""
+        for wf in app_state.wfs:
+            if wf.id != exclude_id and wf.display_name == name:
+                return True
+        return False
+
+    def _on_rename_wf(self, wf_id: int):
+        """Show rename dialog for a waveform."""
+        wf = app_state.get_wf(wf_id)
+        if not wf:
+            return
+
+        prompt = f"Enter new name for {wf.display_name}:"
+        while True:
+            dialog = ctk.CTkInputDialog(
+                text=prompt,
+                title="Rename Waveform"
+            )
+            new_name = dialog.get_input()
+
+            if new_name is None:
+                return  # User cancelled
+
+            new_name = new_name.strip()
+
+            # Empty name reverts to default - check that default isn't taken
+            check_name = new_name if new_name else f"Waveform {wf.id + 1}"
+            if not self._is_duplicate_name(check_name, wf_id):
+                wf.name = new_name
+                self._update_wf_list()
+                self._update_all_plots()
+                return
+
+            prompt = f'"{check_name}" is already in use.\nEnter a different name:'
+
+    def _show_wf_context_menu(self, event, wf_id: int):
+        """Show right-click context menu for a waveform button."""
+        menu_style = {
+            "bg": "#2b2b2b",
+            "fg": "#ffffff",
+            "activebackground": "#3d3d6b",
+            "activeforeground": "#ffffff",
+            "relief": "flat",
+            "borderwidth": 0,
+        }
+        ctx_menu = Menu(self, tearoff=0, **menu_style)
+        ctx_menu.add_command(
+            label="Rename...",
+            command=lambda: self._on_rename_wf(wf_id)
+        )
+        ctx_menu.tk_popup(event.x_root, event.y_root)
+
+    def _show_tooltip(self, event):
+        """Show tooltip near the cursor."""
+        self._hide_tooltip()
+        tip = Toplevel(self)
+        tip.wm_overrideredirect(True)
+        tip.wm_geometry(f"+{event.x_root + 10}+{event.y_root + 10}")
+        lbl = Label(
+            tip, text="Right-click to change waveform name",
+            background="#2b2b2b", foreground="#ffffff",
+            relief="solid", borderwidth=1,
+            padx=6, pady=3, font=("Segoe UI", 9)
+        )
+        lbl.pack()
+        self._tooltip = tip
+
+    def _hide_tooltip(self, event=None):
+        """Destroy the tooltip if it exists."""
+        if self._tooltip:
+            self._tooltip.destroy()
+            self._tooltip = None
 
     def _on_duration_enter(self, event=None):
         """Handle duration entry."""
@@ -602,7 +778,7 @@ class WaveformApp(ctk.CTk):
             )
             wf_arrays.append((time, amp))
 
-            name = f"Waveform_{wf.id + 1}_{wf.wf_type.capitalize()}"
+            name = wf.display_name.replace(" ", "_")
             export_data = prep_wf_for_export(
                 name, time, amp,
                 wf.wf_type,
@@ -671,8 +847,10 @@ class WaveformApp(ctk.CTk):
                 if not app_state.hide_src_wfs:
                     # Convert RGB tuple to matplotlib color format
                     color = tuple(c / 255 for c in wf.color)
-                    label = f"Waveform {wf.id + 1}"
-                    self.ax.plot(time, amp, color=color, label=label, linewidth=2)
+                    self.ax.plot(
+                        time, amp, color=color,
+                        label=wf.display_name, linewidth=2
+                    )
 
         # Plot envelopes with glow effect
         if app_state.can_show_envelopes() and wf_data:
@@ -729,7 +907,7 @@ class WaveformApp(ctk.CTk):
 
             wf_btn = ctk.CTkButton(
                 row_frame,
-                text=f"Waveform {wf.id + 1}",
+                text=wf.display_name,
                 width=180,
                 fg_color=fg_color,
                 border_color=border_color,
@@ -738,6 +916,16 @@ class WaveformApp(ctk.CTk):
             )
             wf_btn.pack(side="left", padx=(0, 5))
             self.wf_buttons.append(wf_btn)
+
+            # Right-click context menu for renaming
+            wf_btn.bind(
+                "<Button-3>",
+                lambda e, wid=wf.id: self._show_wf_context_menu(e, wid)
+            )
+
+            # Hover tooltip
+            wf_btn.bind("<Enter>", self._show_tooltip)
+            wf_btn.bind("<Leave>", self._hide_tooltip)
 
             # Visibility toggle button
             vis_text = "ON" if wf.enabled else "OFF"

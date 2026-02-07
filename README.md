@@ -1,4 +1,4 @@
-# Real-Time Waveform Visualizer
+# Waveform Analyzer
 
 A Python application for visualizing and analyzing multiple waveforms in real-time with envelope analysis capabilities.
 
@@ -30,12 +30,13 @@ env\Scripts\python.exe main.py
 
 ### Basic Usage
 
-1. **Launch the application** - The app starts with one default sine wave (5 Hz, amplitude 5.0)
+1. **Launch the application** - The app starts with one default sine wave (0.2 Hz, amplitude 2.0, offset 8.0)
 
 2. **Adjust waveform parameters:**
-   - Use the **Frequency** slider to change the wave frequency (1-100 Hz)
-   - Use the **Amplitude** slider to adjust the wave amplitude (0-10)
-   - For Square waves, use the **Duty Cycle** slider (1-100%)
+   - Use the **Frequency** input to change the wave frequency (0.1-100 Hz)
+   - Use the **Amplitude** input to adjust the wave amplitude (0-10)
+   - Use the **Offset** input to adjust the Y-axis offset (0-10)
+   - For Square waves, use the **Duty Cycle** input (1-100%)
 
 3. **Change waveform type:**
    - Use the **Type** dropdown to select: Sine, Square, Sawtooth, or Triangle
@@ -48,15 +49,16 @@ env\Scripts\python.exe main.py
    - Click on a waveform in the list to select and edit it
    - Click the **ON/OFF button** to show/hide a waveform
    - Click the **X button** to remove a waveform (minimum 1 required)
+   - **Right-click** a waveform button to rename it (custom names appear in the plot legend and CSV export)
 
 ### Envelope Analysis
 
 When you have 2 or more **enabled** waveforms:
 
-- **Show Max Envelope** - Displays the maximum amplitude at each time point (red dashed line)
-- **Show Min Envelope** - Displays the minimum amplitude at each time point (blue dashed line)
+- **Show Max Envelope** - Displays the maximum amplitude at each time point (green glowing line)
+- **Show Min Envelope** - Displays the minimum amplitude at each time point (red glowing line)
 
-Both envelopes can be enabled simultaneously.
+Both envelopes can be enabled simultaneously. Source waveforms are automatically hidden when envelopes are shown.
 
 ### Waveform Parameters
 
@@ -82,10 +84,13 @@ Each waveform has the following adjustable parameters:
 
 - **4 Waveform Types:** Sine, Square, Sawtooth, Triangle
 - **Up to 5 simultaneous waveforms**
+- **Custom waveform naming** via right-click context menu
 - **Real-time visualization** with responsive performance
-- **Envelope analysis** (Max/Min envelopes)
-- **CSV export** with native OS file dialog
+- **Envelope analysis** with glowing Max/Min envelope lines
+- **Auto-hide source waveforms** when envelopes are enabled
+- **CSV export** with native OS file dialog (includes custom names)
 - **Independent waveform control**
+- **Help menu** with About dialog (version, author info)
 - **Modern Windows 11 UI** with CustomTkinter
 - **Dark theme** matplotlib plotting
 
@@ -112,6 +117,7 @@ waveform_generator/
 ## Dependencies
 
 - **CustomTkinter** >= 5.2.0 - Modern GUI framework
+- **CTkMenuBar** >= 0.9 - Dark-themed menu bar for CustomTkinter
 - **matplotlib** >= 3.8.0 - Plotting library
 - **NumPy** >= 1.24.0 - Numerical computing
 - **SciPy** >= 1.11.0 - Signal processing
@@ -148,6 +154,6 @@ waveform_generator/
 
 ## Version
 
-Current version: **1.0**
+Current version: **0.9.1**
 
 See [CLAUDE.md](CLAUDE.md) for the complete specification and future roadmap.

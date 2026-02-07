@@ -1,5 +1,5 @@
 """
-Waveform Generator/Analyzer - Main Entry Point
+Waveform Analyzer - Main Entry Point
 
 This module initializes CustomTkinter and runs the application.
 """

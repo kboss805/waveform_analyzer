@@ -1,5 +1,5 @@
 """
-Application state manager for the Waveform Generator/Analyzer.
+Application state manager for the Waveform Analyzer.
 
 This module manages global and per-waveform state without UI or calculation logic.
 """
@@ -38,12 +38,13 @@ class WfState:
         self,
         wf_id: int,
         wf_type: str = "sine",
-        freq: float = 1.0,
-        amp: float = 5.0,
-        offset: float = 5.0,
+        freq: float = 0.2,
+        amp: float = 2.0,
+        offset: float = 8.0,
         duty_cycle: float = 50.0,
         color: Tuple[int, int, int] = (255, 255, 0),
-        enabled: bool = True
+        enabled: bool = True,
+        name: str = ""
     ):
         """
         Initialize waveform state.
@@ -57,6 +58,7 @@ class WfState:
             duty_cycle: Duty cycle percentage (1.0-100.0, for Square only)
             color: RGB color tuple
             enabled: Whether waveform is visible
+            name: Custom display name (empty string uses default)
         """
         self.id = wf_id
         self.wf_type = wf_type
@@ -66,6 +68,12 @@ class WfState:
         self.duty_cycle = max(DUTY_MIN, min(DUTY_MAX, duty_cycle))
         self.color = color
         self.enabled = enabled
+        self.name = name
+
+    @property
+    def display_name(self) -> str:
+        """Return custom name if set, otherwise default name."""
+        return self.name if self.name else f"Waveform {self.id + 1}"
 
 
 class AppState:
@@ -97,8 +105,8 @@ class AppState:
             WfState(
                 wf_id=0,
                 wf_type="sine",
-                freq=1.0,
-                amp=5.0,
+                freq=0.2,
+                amp=2.0,
                 color=self.COLORS[0],
                 enabled=True
             )
@@ -120,8 +128,8 @@ class AppState:
         new_wf = WfState(
             wf_id=wf_id,
             wf_type="sine",
-            freq=1.0,
-            amp=5.0,
+            freq=0.2,
+            amp=2.0,
             color=color,
             enabled=True
         )
