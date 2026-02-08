@@ -2,7 +2,7 @@
 
 **Version:** 1.1.0
 **Target Users:** Engineers visualizing up to 5 independent waveforms with envelope analysis  
-**Tech Stack:** Python 3.11+, NumPy 1.24+, SciPy 1.11+, CustomTkinter 5.2+, matplotlib 3.8+
+**Tech Stack:** Python 3.11+, NumPy 1.24+, SciPy 1.11+, CustomTkinter 5.2+, CTkMenuBar 0.9+, matplotlib 3.8+
 
 ---
 
@@ -54,64 +54,16 @@ User Input → Callback → Update State → Regenerate Waveforms → Update UI 
 
 ---
 
-## User Stories (v1.0 Requirements)
+## Completed Requirements (v1.0)
 
-### US1: Visualize Multiple Waveforms
-**As an** engineer learning signal processing  
-**I want to** see multiple waveforms in time domain plots simultaneously  
-**So that** I can understand how waveforms behave and interact
+All v1.0 user stories completed. See git history for original acceptance criteria.
 
-**Acceptance Criteria:**
-- ✅ Display all plots updating in real-time
-- ✅ Include standard view controls like pan and zoom
-- ✅ Smooth updates (>30 FPS)
-- ✅ All plots update within 100ms of parameter change
-
-### US2: Adjust Parameters Dynamically
-**As an** engineer  
-**I want to** adjust frequency, amplitude, and duty cycle of each waveform  
-**So that** I can experiment and see immediate visual feedback
-
-**Acceptance Criteria:**
-- ✅ Frequency: 0.1-100 Hz, slider step 0.1 Hz
-- ✅ Amplitude: 0-10, slider step 0.1
-- ✅ Duty Cycle: 1-100%, slider step 1% (only for Square waves)
-- ✅ Wave Duration: 0.5-120 seconds, step 0.5s
-- ✅ All plots update immediately on parameter change (<100ms latency)
-- ✅ Current values displayed clearly next to each slider
-
-### US3: Generate Envelope Waveforms
-**As an** engineer  
-**I want to** optionally generate envelope waveforms from currently displayed waveforms  
-**So that** I can view the maximum or minimum amplitude of all waveforms at any given sample
-
-**Acceptance Criteria:**
-- ✅ Checkbox control "Show Max Envelope" in Global Controls
-- ✅ Checkbox control "Show Min Envelope" in Global Controls
-- ✅ MaxEnvelope displays as green (#00FF00) glowing line when enabled
-- ✅ MinEnvelope displays as red (#FF0000) glowing line when enabled
-- ✅ Both can be enabled simultaneously
-- ✅ Envelope waveforms update in real-time (<100ms) when:
-  - Any waveform parameter changes
-  - Waveforms are added/removed
-  - Waveform visibility is toggled
-- ✅ Envelope waveforms only calculate from enabled/visible waveforms
-- ✅ Envelope checkboxes disabled when only 1 waveform exists
-- ✅ Envelope waveforms appear in plot legend
-- ✅ Envelope waveforms included in CSV export when enabled
-- ✅ No performance degradation (maintain >30 FPS)
-
-### US4: Export Data
-**As a** researcher  
-**I want to** export waveform data to CSV  
-**So that** I can analyze it in other tools or share with colleagues
-
-**Acceptance Criteria:**
-- ✅ Export includes time and amplitude columns
-- ✅ Metadata in CSV header (waveform type, frequency, amplitude)
-- ✅ User can specify filename
-- ✅ Success confirmation displayed
-- ✅ CSV format compatible with Excel/MATLAB
+| Story | Feature | Key Criteria |
+|-------|---------|-------------|
+| US1 | Multiple Waveforms | Real-time display, >30 FPS, <100ms updates, pan/zoom |
+| US2 | Dynamic Parameters | Freq 0.1-100 Hz, Amp 0-10, Duty 1-100%, Duration 0.5-120s |
+| US3 | Envelope Generation | Max/Min checkboxes, glow lines, real-time, auto-disable when ≤1 wf |
+| US4 | CSV Export | Time + amplitude columns, metadata headers, native file dialog |
 
 ---
 
@@ -137,13 +89,12 @@ User Input → Callback → Update State → Regenerate Waveforms → Update UI 
 - **Behavior:** Disabled when ≤1 waveform, calculates from enabled waveforms only, real-time updates
 
 ### Measurement Cursors
-- **Toggle:** "Cursors: ON/OFF" button in Measurement sidebar section
-- **Live Tracking:** When enabled, a white cursor line follows the mouse and readout updates continuously
-- **Pin Reference:** Left-click on plot to pin a dashed reference cursor for comparison
-- **Readout:** Shows time and interpolated amplitude for each enabled waveform at cursor positions (Pin + Cur labels)
-- **Delta:** When both pinned and live cursors present, shows ΔT between them
-- **Clear Pin:** "Clear Pin" button removes the pinned reference cursor
+- **Always On:** Live cursor tracking is always active (no toggle button)
+- **Live Tracking:** A cursor line follows the mouse over the plot
+- **Proximity Highlight:** When the cursor is near a visible line (waveform or envelope), the cursor color matches that line and a highlight dot appears at the intersection point
+- **Pin Reference:** Left-click on the plot to pin a dashed gray reference cursor for comparison
 - **Persistence:** Pinned cursor survives parameter changes (re-drawn after plot update)
+- **No Sidebar Controls:** All cursor feedback is displayed directly on the plot
 
 ### Waveform Renaming
 - **Right-click** any waveform button to open context menu with "Rename..." option
@@ -165,19 +116,19 @@ User Input → Callback → Update State → Regenerate Waveforms → Update UI 
 ### Export Capability
 - **Format:** CSV with time column + amplitude columns
 - **Metadata:** Timestamp, waveform parameters, sample rate, duration
-- **Options:** Select which waveforms to export (including envelopes)
+- **Scope:** Exports all enabled waveforms and active envelopes
 
 ---
 
 ## State Model
 
-### Per-Waveform State
+### Per-Waveform State (`WfState` in `app_state.py`)
 ```python
 {
     "id": int,              # 0-4
-    "wave_type": str,       # "sine" | "square" | "sawtooth" | "triangle"
-    "frequency": float,     # 0.1-100.0 Hz
-    "amplitude": float,     # 0.0-10.0
+    "wf_type": str,         # "sine" | "square" | "sawtooth" | "triangle"
+    "freq": float,          # 0.1-100.0 Hz
+    "amp": float,           # 0.0-10.0
     "offset": float,        # 0.0-10.0
     "duty_cycle": float,    # 1.0-100.0% (Square only)
     "color": tuple,         # (R, G, B) auto-assigned
@@ -186,16 +137,16 @@ User Input → Callback → Update State → Regenerate Waveforms → Update UI 
 }
 ```
 
-### Global State
+### Global State (`AppState` in `app_state.py`)
 ```python
 {
-    "duration": float,               # 0.5-120.0 seconds (wave duration)
-    "sample_rate": int,              # 1000 (fixed)
-    "active_waveform_index": int,    # Which waveform controls are shown
-    "show_max_envelope": bool,       # MaxEnvelope visibility
-    "show_min_envelope": bool,       # MinEnvelope visibility
-    "show_rms_envelope": bool,       # RMS Envelope visibility
-    "hide_src_wfs": bool             # Auto-set when envelopes enabled
+    "duration": float,          # 0.5-120.0 seconds (wave duration)
+    "sample_rate": int,         # 1000 (fixed)
+    "active_wf_index": int,     # Which waveform controls are shown
+    "show_max_env": bool,       # MaxEnvelope visibility
+    "show_min_env": bool,       # MinEnvelope visibility
+    "show_rms_env": bool,       # RMS Envelope visibility
+    "hide_src_wfs": bool        # Auto-set when envelopes enabled
 }
 ```
 
@@ -229,9 +180,6 @@ User Input → Callback → Update State → Regenerate Waveforms → Update UI 
 │ ☐ Show Max Envelope          │  ← Disabled when ≤1 waveform
 │ ☐ Show Min Envelope          │  ← Peak-to-Peak fill when both on
 │ ☐ Show RMS Envelope          │  ← Orange glow line
-├─ Measurement ────────────────┤
-│ [Cursors: OFF] [Clear Pin]   │  ← Toggle + clear pinned cursor
-│ Cursor readout text          │  ← Live T/Y values, pin, ΔT
 ├─ Export ─────────────────────┤
 │ [Export to CSV]              │  ← Opens native OS file dialog
 │ Status: Ready                │
@@ -256,101 +204,85 @@ User Input → Callback → Update State → Regenerate Waveforms → Update UI 
 | MinEnvelope | Red (glow) | #FF0000 |
 | RMSEnvelope | Orange (glow) | #FFA500 |
 | Peak-to-Peak | Cyan (fill) | #00FFFF @ 12% alpha |
-| Cursors | Gray (dashed) | #AAAAAA @ 70% alpha |
+| Live Cursor | White (default) | #FFFFFF @ 50% alpha, matches nearest line on proximity |
+| Pinned Cursor | Gray (dashed) | #AAAAAA @ 70% alpha |
 
 ### Plot Styling
-- Background: #1a1a1a, Axes: #666666, Grid: #666666 @ 20% opacity
+- Background: #1a1a1a, Axes: #666666, Grid: #666666 @ 30% opacity
 - Line width: 2px, Anti-aliasing: enabled
 
 ---
 
 ## Implementation Reference
 
-### Wave Generation Functions
+### Wave Generation Functions (`waveform_generator.py`)
 ```python
 import numpy as np
 from scipy import signal
 
-# All functions return (time: np.ndarray, amplitude: np.ndarray)
+# All functions return Tuple[np.ndarray, np.ndarray] (time, amplitude)
+# Waveforms use half-amplitude centered on offset: offset + (amp/2) * waveform()
 
-def generate_sine_wave(frequency: float, amplitude: float, duration: float = 1.0, sample_rate: int = 1000):
-    time = np.linspace(0, duration, int(sample_rate * duration))
-    return time, amplitude * np.sin(2 * np.pi * frequency * time)
+def gen_sine_wf(freq, amp, offset=0.0, dur=1.0, sample_rate=1000):
+    time = np.linspace(0, dur, int(sample_rate * dur))
+    return time, offset + (amp / 2) * np.sin(2 * np.pi * freq * time)
 
-def generate_square_wave(frequency: float, amplitude: float, duty_cycle: float, duration: float = 1.0, sample_rate: int = 1000):
-    time = np.linspace(0, duration, int(sample_rate * duration))
-    return time, amplitude * signal.square(2 * np.pi * frequency * time, duty=duty_cycle/100)
+def gen_square_wf(freq, amp, duty_cycle, offset=0.0, dur=1.0, sample_rate=1000):
+    time = np.linspace(0, dur, int(sample_rate * dur))
+    return time, offset + (amp / 2) * signal.square(2 * np.pi * freq * time, duty=duty_cycle/100)
 
-def generate_sawtooth_wave(frequency: float, amplitude: float, duration: float = 1.0, sample_rate: int = 1000):
-    time = np.linspace(0, duration, int(sample_rate * duration))
-    return time, amplitude * signal.sawtooth(2 * np.pi * frequency * time)
+def gen_sawtooth_wf(freq, amp, offset=0.0, dur=1.0, sample_rate=1000):
+    time = np.linspace(0, dur, int(sample_rate * dur))
+    return time, offset + (amp / 2) * signal.sawtooth(2 * np.pi * freq * time)
 
-def generate_triangle_wave(frequency: float, amplitude: float, duration: float = 1.0, sample_rate: int = 1000):
-    time = np.linspace(0, duration, int(sample_rate * duration))
-    return time, amplitude * signal.sawtooth(2 * np.pi * frequency * time, width=0.5)
+def gen_triangle_wf(freq, amp, offset=0.0, dur=1.0, sample_rate=1000):
+    time = np.linspace(0, dur, int(sample_rate * dur))
+    return time, offset + (amp / 2) * signal.sawtooth(2 * np.pi * freq * time, width=0.5)
+
+# Dispatcher — primary API used by ui_components.py
+def gen_wf(wf_type, freq, amp, offset=0.0, duty_cycle=50.0, dur=1.0, sample_rate=1000):
+    # Routes to gen_sine_wf / gen_square_wf / gen_sawtooth_wf / gen_triangle_wf
+    # Defaults to sine if wf_type is unrecognized
 
 # Envelope calculations
-def compute_max_envelope(waveforms: list[tuple[np.ndarray, np.ndarray]]):
-    if not waveforms: return np.array([]), np.array([])
-    time = waveforms[0][0]  # Shared time base
-    return time, np.max(np.array([w[1] for w in waveforms]), axis=0)
+def compute_max_env(wfs):
+    time = wfs[0][0]
+    return time, np.max(np.array([w[1] for w in wfs]), axis=0)
 
-def compute_min_envelope(waveforms: list[tuple[np.ndarray, np.ndarray]]):
-    if not waveforms: return np.array([]), np.array([])
-    time = waveforms[0][0]  # Shared time base
-    return time, np.min(np.array([w[1] for w in waveforms]), axis=0)
+def compute_min_env(wfs):
+    time = wfs[0][0]
+    return time, np.min(np.array([w[1] for w in wfs]), axis=0)
+
+def compute_rms_env(wfs):
+    time = wfs[0][0]
+    amps = np.array([w[1] for w in wfs])
+    return time, np.sqrt(np.mean(amps ** 2, axis=0))
 ```
 
-### CustomTkinter + matplotlib Patterns
-```python
-import customtkinter as ctk
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.figure import Figure
+### UI Architecture Patterns
 
-# Configure appearance
-ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
+**matplotlib Integration:** Dark-themed `Figure` embedded via `FigureCanvasTkAgg` in a CustomTkinter frame. Plot update cycle: `ax.clear()` → plot all waveforms → draw envelopes → `canvas.draw()`.
 
-# Create matplotlib figure with dark theme
-plt.style.use('dark_background')
-fig = Figure(figsize=(8, 6), facecolor='#1a1a1a')
-ax = fig.add_subplot(111)
-canvas = FigureCanvasTkAgg(fig, master=plot_frame)
-canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+**Glow Effect:** Layered lines with decreasing linewidth (8/6/4px at 0.1/0.2/0.3 alpha) plus 2px core at full alpha.
 
-# Plot waveforms
-ax.clear()
-ax.plot(time, amplitude, color=color, label=label, linewidth=2)
-ax.set_xlabel("Time (s)")
-ax.set_ylabel("Amplitude")
-ax.legend()
-canvas.draw()
+**Parameter Controls:** `CTkEntry` for numeric input with paired `CTkButton` (+/-) for increment/decrement. Step values defined as constants in `app_state.py`.
 
-# Entry with +/- buttons
-freq_entry = ctk.CTkEntry(frame, width=120)
-freq_dec_btn = ctk.CTkButton(frame, text="-", width=30, command=on_decrement)
-freq_inc_btn = ctk.CTkButton(frame, text="+", width=30, command=on_increment)
+**File Dialogs:** `tkinter.filedialog.asksaveasfilename()` for native OS export dialogs.
 
-# Native file dialog for export
-from tkinter import filedialog
-filename = filedialog.asksaveasfilename(
-    defaultextension=".csv",
-    filetypes=[("CSV files", "*.csv")],
-    initialfile="waveforms.csv"
-)
-```
+**Menu Bar:** `CTkMenuBar` for dark-themed File/Help menus (not standard tkinter Menu).
+
+See `ui_components.py` for full implementation details.
 
 ### CSV Export Format
 ```csv
 # Exported: 2025-01-03 14:30:00
-# MySignal: Sine, 0.2 Hz, 10.0 amp
-# Waveform_2: Square, 0.2 Hz, 10.0 amp, 50.0% duty cycle
+# MySignal: Sine, 0.2 Hz, 2.0 amp, 8.0 offset
+# Waveform_2: Square, 0.2 Hz, 2.0 amp, 8.0 offset, 50.0% duty cycle
 # Max_Envelope: Computed from 2 waveforms
 # Sample Rate: 1000 S/s, Duration: 10.0s
 Time (s),MySignal,Waveform_2,Max_Envelope
-0.000000,8.000000,10.000000,10.000000
-0.001000,8.001257,10.000000,10.000000
+0.000000,8.000000,8.000000,8.000000
+0.001000,8.001257,9.000000,9.000000
 ```
 Note: Custom waveform names (via rename) are used for column headers. Spaces replaced with underscores.
 
@@ -378,18 +310,27 @@ Note: Custom waveform names (via rename) are used for column headers. Spaces rep
 
 ## Testing Protocol
 
-### Pre-Commit Checklist
-- [ ] All 5 wave types render correctly
-- [ ] Edge cases: min/max frequency (0.1 Hz, 100 Hz), min/max amplitude (0, 10)
-- [ ] Duty cycle: 1%, 50%, 100% for Square
-- [ ] Wave duration: 0.5s, 10s, 120s
-- [ ] Envelopes: Test with 2, 3, 5 waveforms (same phase, opposite phase)
-- [ ] Mixed enabled/disabled waveforms
-- [ ] Toggle max/min independently and together
-- [ ] CSV export with/without envelopes
-- [ ] Add/remove waveforms (test min/max limits)
-- [ ] No console errors or warnings
-- [ ] FPS >30 during parameter changes
+### Automated Tests (87 tests)
+Run: `python -m pytest test_waveform_analyzer.py -v`
+
+Covers the pre-commit checklist automatically:
+| Test Class | Checklist Item | Tests |
+|-----------|----------------|-------|
+| `TestWaveTypes` | All 4 wave types render correctly | 19 |
+| `TestEdgeCases` | Min/max frequency (0.1/100 Hz), amplitude (0/10) | 7 |
+| `TestDutyCycle` | Duty cycle 1%, 50%, 100% for Square | 5 |
+| `TestWaveDuration` | Wave duration 0.5s, 10s, 120s | 5 |
+| `TestEnvelopes` | Envelopes with 2, 3, 5 waveforms, same/opposite phase | 12 |
+| `TestMixedEnabledDisabled` | Mixed enabled/disabled waveforms | 4 |
+| `TestEnvelopeToggles` | Toggle max/min independently and together | 6 |
+| `TestCSVExport` | CSV export with/without envelopes | 6 |
+| `TestWaveformLimits` | Add/remove waveforms (min/max limits) | 8 |
+| `TestNoErrors` | No console errors or warnings | 5 |
+| `TestPerformance` | FPS >30 (gen <100ms, envelope <10ms) | 3 |
+| `TestConfig` | Configuration load/save | 3 |
+
+### Pre-Commit Checklist (Manual Items)
+After running automated tests, verify these UI-dependent items manually:
 
 ### Manual Test Scenarios
 1. **Startup:** Should show waveform with values from `default.cfg` (or fallback defaults)
@@ -410,14 +351,10 @@ Note: Custom waveform names (via rename) are used for column headers. Spaces rep
 ### v1.1 - Enhanced Analysis
 - ✅ **Peak-to-Peak Envelope:** Cyan shaded area between max/min (auto when both enabled)
 - ✅ **RMS Envelope:** Orange glowing line, RMS across enabled waveforms
-- ✅ **Measurement Cursors:** Live tracking cursor with pinned reference and ΔT
+- ✅ **Measurement Cursors:** Always-on live tracking cursor with proximity highlight and pinned reference
 
-### v1.2 - Composite Operations
-- [ ] **Arithmetic Operations:** Add, subtract, multiply, divide waveforms
-
-### v1.3 - Export & Usability
+### v1.2 - Export & Usability
 - [ ] **Export Formats:** MATLAB .mat, JSON
-- [ ] **Keyboard Shortcuts:** Space, A, 1-5 for quick actions
 - [ ] **Color Customization:** User-selectable waveform colors
 - [ ] **Theme Toggle:** Dark/light mode
 
@@ -426,64 +363,42 @@ Note: Custom waveform names (via rename) are used for column headers. Spaces rep
 - [ ] **Multiple Plots:** Separate plots option
 - [ ] **Detachable Windows:** Resizable, multi-monitor support
 - ✅ **Custom User Settings:** Configurable defaults via `default.cfg` and File → Configure... dialog
+- [ ] **Self Documented Code:** Add comments in standard format for tools like doxygen
 
 ---
 
-## Adding New Features (Guide for Future Development)
+## Development Workflow
 
-### Step 1: Update This Document
-1. Add feature to appropriate version section in Roadmap
-2. Update State Model if new state required
-3. Update UI Specification if new controls needed
-4. Document any new constraints
+### Before Starting Any Task
 
-### Step 2: Plan Architecture Impact
-- Does it need new module? Update Project Structure
-- Does it change data flow? Update Architecture section
-- Does it affect performance SLAs? Update metrics
-- Does it violate design constraints? Discuss alternatives
+Ask yourself:
+1. What feature/story does this relate to? (Check Roadmap)
+2. What modules will I modify? (See Module Responsibilities)
+3. Does this change the state model? (Update State Model section if yes)
+4. Will this affect performance SLAs? (Re-test if yes)
+5. Does this violate any design constraints? (Discuss alternatives if yes)
+6. What edge cases should I test? (Add to Testing Protocol)
 
-### Step 3: Implement
-- Create functions in appropriate modules per Module Responsibilities
-- Follow Code Style and Error Handling standards
-- Update Testing Protocol with new test cases
+If uncertain, **ask for clarification before coding**.
 
-### Step 4: Validate
-- Run full Testing Protocol checklist
-- Verify performance SLAs still met
-- Update version number if releasing
+### Adding a New Feature
 
----
+1. **Update this document** — add to Roadmap, update State Model / UI Spec if needed
+2. **Plan architecture** — check if new module needed, data flow changes, performance impact
+3. **Implement** — follow Module Responsibilities, Code Style, Error Handling standards
+4. **Validate** — run Pre-Commit Checklist, verify performance SLAs, update `APP_VERSION`
 
-## Common Pitfall Avoidance
+### Quick Reference
 
-### Don't:
+**Don't:**
 - ❌ Use Pandas for CSV (NumPy only)
 - ❌ Create separate time bases per waveform
 - ❌ Put business logic in UI layer
-- ❌ Use global variables excessively
 - ❌ Skip type hints or docstrings
-- ❌ Add new config keys without updating the Configure dialog and `save_config()`
+- ❌ Add config keys without updating the Configure dialog and `save_config()`
 
-### Do:
+**Do:**
 - ✅ Keep modules focused on single responsibility
-- ✅ Separate UI creation from callbacks/logic
-- ✅ Use tags for all updatable UI elements
-- ✅ Test edge cases and error conditions
-- ✅ Monitor FPS during development
 - ✅ Clamp invalid inputs instead of crashing
-- ✅ Write descriptive commit messages
-
----
-
-## Questions for Claude When Starting Work
-
-Before implementing ANY task, ask:
-1. **What user story does this relate to?**
-2. **What modules will I modify?**
-3. **Does this change the state model?**
-4. **Will this affect performance SLAs?**
-5. **What edge cases should I test?**
-6. **Does this violate any design constraints?**
-
-If uncertain, **ask for clarification before coding**.
+- ✅ Monitor FPS during development
+- ✅ Test edge cases and error conditions

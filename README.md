@@ -30,7 +30,7 @@ env\Scripts\python.exe main.py
 
 ### Basic Usage
 
-1. **Launch the application** - The app starts with one default sine wave (0.2 Hz, amplitude 2.0, offset 8.0)
+1. **Launch the application** - The app starts with one default waveform using values from `default.cfg`
 
 2. **Adjust waveform parameters:**
    - Use the **Frequency** input to change the wave frequency (0.1-100 Hz)
@@ -64,11 +64,11 @@ All envelopes can be enabled simultaneously. Source waveforms are automatically 
 
 ### Measurement Cursors
 
-1. Click **Cursors: OFF** in the Measurement section to enable cursor mode
-2. **Move the mouse** over the plot — a live cursor line tracks the mouse position and the readout continuously updates with time and amplitude values for each enabled waveform
-3. **Left-click** on the plot to pin a reference cursor (dashed line)
-4. With a pinned cursor and the live cursor, the time difference (ΔT) between them is displayed
-5. Click **Clear Pin** to remove the pinned reference cursor
+Measurement cursors are always active — no toggle needed:
+
+1. **Move the mouse** over the plot — a live cursor line tracks the mouse position
+2. **Hover near a waveform or envelope line** — the cursor color matches the nearest line and a highlight dot appears at the intersection
+3. **Left-click** on the plot to pin a reference cursor (dashed gray line) for comparison
 
 ### Waveform Parameters
 
@@ -110,7 +110,7 @@ Default settings are stored in `default.cfg` (INI format) alongside the applicat
 - **Custom waveform naming** via right-click context menu
 - **Real-time visualization** with responsive performance
 - **Envelope analysis** with glowing Max/Min/RMS envelope lines and Peak-to-Peak fill
-- **Live measurement cursors** with real-time tracking, pinned reference, and ΔT display
+- **Live measurement cursors** with real-time tracking, proximity highlight, and pinned reference
 - **Auto-hide source waveforms** when envelopes are enabled
 - **CSV export** with native OS file dialog (includes custom names)
 - **Independent waveform control**
@@ -123,23 +123,25 @@ Default settings are stored in `default.cfg` (INI format) alongside the applicat
 
 ```
 waveform_analyzer/
-├── main.py                  # Application entry point
-├── app_state.py            # State management
-├── waveform_generator.py   # Waveform generation functions
-├── ui_components.py        # UI and callbacks
-├── data_export.py          # CSV export functionality
-├── config.py               # Configuration loader/saver
-├── default.cfg             # User-editable default settings (INI format)
-├── requirements.txt        # Python dependencies
-├── CLAUDE.md              # Full specification document
-└── README.md              # This file
+├── main.py                       # Application entry point
+├── app_state.py                  # State management
+├── waveform_generator.py         # Waveform generation functions
+├── ui_components.py              # UI and callbacks
+├── data_export.py                # CSV export functionality
+├── config.py                     # Configuration loader/saver
+├── test_waveform_analyzer.py     # Automated pre-commit tests (87 tests)
+├── default.cfg                   # User-editable default settings (INI format)
+├── icon.ico                      # Application icon
+├── requirements.txt              # Python dependencies
+├── CLAUDE.md                     # Full specification document
+└── README.md                     # This file
 ```
 
 ## System Requirements
 
 - Python 3.11 or higher
 - Windows/Linux/macOS
-- Minimum resolution: 1000x800 (recommended: 1200x950)
+- Minimum resolution: 1000x800 (recommended: 1200x900)
 
 ## Dependencies
 
@@ -155,6 +157,17 @@ waveform_analyzer/
 - **Plot update latency:** <100ms
 - **Memory usage:** <200MB
 - **Startup time:** <2 seconds
+
+## Testing
+
+Run the automated test suite (requires `pytest`):
+
+```bash
+pip install pytest
+python -m pytest test_waveform_analyzer.py -v
+```
+
+The 87 tests cover all pre-commit checklist items: wave types, edge cases, duty cycle, durations, envelope calculations, enabled/disabled state, CSV export, waveform limits, error handling, and performance SLAs.
 
 ## Keyboard Shortcuts
 

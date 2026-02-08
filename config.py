@@ -107,8 +107,8 @@ def save_config(settings: dict[str, Any]) -> bool:
             "# Y-axis label for the plot",
             f"y_axis_title = {settings.get('y_axis_title', 'Amplitude')}",
             "# Y-axis minimum and maximum values",
-            f"y_min = {settings.get('y_min', -5.0)}",
-            f"y_max = {settings.get('y_max', 15.0)}",
+            f"y_min = {settings.get('y_min', 0.0)}",
+            f"y_max = {settings.get('y_max', 10.0)}",
             "",
         ]
         with open(config_path, "w", encoding="utf-8") as f:

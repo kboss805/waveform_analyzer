@@ -6,14 +6,15 @@ This module contains all CustomTkinter UI creation and callback logic.
 
 import os
 import sys
-from typing import Any
+from typing import Any, Optional, Tuple
 import numpy as np
 import tkinter as tk
 import customtkinter as ctk
 from tkinter import filedialog, Menu, Toplevel, Label
 from CTkMenuBar import CTkMenuBar, CustomDropdownMenu
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 from matplotlib.figure import Figure
 
 from app_state import (
@@ -56,6 +57,23 @@ COLOR_SUCCESS = "#00FF00"
 COLOR_ERROR = "#FF0000"
 COLOR_RMS = "#FFA500"
 COLOR_P2P_FILL = "#00FFFF"
+COLOR_CURSOR_DEFAULT = "#FFFFFF"
+COLOR_CURSOR_PINNED = "#AAAAAA"
+
+# Glow effect parameters
+GLOW_LINEWIDTHS = [8, 6, 4]
+GLOW_ALPHAS = [0.1, 0.2, 0.3]
+GLOW_CORE_WIDTH = 2
+
+# Cursor parameters
+CURSOR_PROXIMITY_THRESHOLD = 0.04  # 4% of visible Y range
+
+# Window dimensions
+WINDOW_DEFAULT_SIZE = "1200x900"
+WINDOW_MIN_WIDTH = 1000
+WINDOW_MIN_HEIGHT = 800
+CONFIG_DIALOG_SIZE = "420x640"
+ABOUT_DIALOG_SIZE = "400x310"
 
 
 class WaveformApp(ctk.CTk):
@@ -66,8 +84,8 @@ class WaveformApp(ctk.CTk):
 
         # Window configuration
         self.title("Waveform Analyzer")
-        self.geometry("1200x900")
-        self.minsize(1000, 800)
+        self.geometry(WINDOW_DEFAULT_SIZE)
+        self.minsize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
 
         # Set window icon
         self._set_icon()
@@ -79,10 +97,13 @@ class WaveformApp(ctk.CTk):
         self._plot_y_title: str = _cfg["y_axis_title"]
 
         # Store widget references
-        self.wf_buttons = []
-        self.toggle_buttons = []
-        self.remove_buttons = []
-        self._tooltip = None
+        self.wf_buttons: list = []
+        self.toggle_buttons: list = []
+        self.remove_buttons: list = []
+        self._tooltip: Optional[Any] = None
+
+        # Cached waveform data for cursor proximity checks
+        self._cached_wf_data: list[Tuple[np.ndarray, np.ndarray]] = []
 
         # Create UI components
         self._create_menu_bar()
@@ -183,7 +204,7 @@ class WaveformApp(ctk.CTk):
 
         dialog = ctk.CTkToplevel(self)
         dialog.title("Configure Defaults")
-        dialog.geometry("420x640")
+        dialog.geometry(CONFIG_DIALOG_SIZE)
         dialog.resizable(False, False)
         dialog.transient(self)
         dialog.grab_set()
@@ -193,8 +214,9 @@ class WaveformApp(ctk.CTk):
             dialog.after(200, lambda: dialog.iconbitmap(icon_path))
 
         dialog.update_idletasks()
-        x = self.winfo_x() + (self.winfo_width() - 420) // 2
-        y = self.winfo_y() + (self.winfo_height() - 640) // 2
+        dlg_w, dlg_h = 420, 640
+        x = self.winfo_x() + (self.winfo_width() - dlg_w) // 2
+        y = self.winfo_y() + (self.winfo_height() - dlg_h) // 2
         dialog.geometry(f"+{x}+{y}")
 
         content = ctk.CTkFrame(dialog, fg_color="transparent")
@@ -279,6 +301,12 @@ class WaveformApp(ctk.CTk):
                     text_color=COLOR_ERROR
                 )
                 return
+            if new_settings["y_min"] >= new_settings["y_max"]:
+                status_lbl.configure(
+                    text="Y-Axis Min must be less than Max.",
+                    text_color=COLOR_ERROR
+                )
+                return
             if save_config(new_settings):
                 # Apply display settings immediately
                 self._plot_y_min = new_settings["y_min"]
@@ -302,7 +330,7 @@ class WaveformApp(ctk.CTk):
         """Show the About dialog."""
         dialog = ctk.CTkToplevel(self)
         dialog.title("About Waveform Analyzer")
-        dialog.geometry("400x310")
+        dialog.geometry(ABOUT_DIALOG_SIZE)
         dialog.resizable(False, False)
         dialog.transient(self)
         dialog.grab_set()
@@ -314,8 +342,9 @@ class WaveformApp(ctk.CTk):
 
         # Center the dialog on the main window
         dialog.update_idletasks()
-        x = self.winfo_x() + (self.winfo_width() - 400) // 2
-        y = self.winfo_y() + (self.winfo_height() - 310) // 2
+        dlg_w, dlg_h = 400, 310
+        x = self.winfo_x() + (self.winfo_width() - dlg_w) // 2
+        y = self.winfo_y() + (self.winfo_height() - dlg_h) // 2
         dialog.geometry(f"+{x}+{y}")
 
         # Content frame
@@ -389,118 +418,50 @@ class WaveformApp(ctk.CTk):
         self.wf_type_combo.set("Sine")
 
         # Wave Duration
-        ctk.CTkLabel(self.sidebar, text="Wave Duration (s)").pack(anchor="w", pady=(5, 2))
-        self.duration_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        self.duration_frame.pack(fill="x", pady=(0, 5))
-
-        self.duration_entry = ctk.CTkEntry(self.duration_frame, width=120)
-        self.duration_entry.pack(side="left", padx=(0, 5))
-        self.duration_entry.insert(0, f"{DEFAULT_DURATION:.1f}")
-        self.duration_entry.bind("<Return>", self._on_duration_enter)
-        self.duration_entry.bind("<FocusOut>", self._on_duration_enter)
-
-        self.duration_dec_btn = ctk.CTkButton(
-            self.duration_frame, text="-", width=30,
-            command=self._on_duration_dec
-        )
-        self.duration_dec_btn.pack(side="left", padx=2)
-
-        self.duration_inc_btn = ctk.CTkButton(
-            self.duration_frame, text="+", width=30,
-            command=self._on_duration_inc
-        )
-        self.duration_inc_btn.pack(side="left", padx=2)
+        _, self.duration_frame, self.duration_entry, \
+            self.duration_dec_btn, self.duration_inc_btn = \
+            self._create_param_row(
+                "Wave Duration (s)", DEFAULT_DURATION,
+                self._on_duration_enter,
+                self._on_duration_dec, self._on_duration_inc
+            )
 
         # Offset
-        ctk.CTkLabel(self.sidebar, text="Offset").pack(anchor="w", pady=(5, 2))
-        self.offset_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        self.offset_frame.pack(fill="x", pady=(0, 5))
-
-        self.offset_entry = ctk.CTkEntry(self.offset_frame, width=120)
-        self.offset_entry.pack(side="left", padx=(0, 5))
-        self.offset_entry.insert(0, f"{DEFAULT_OFFSET:.1f}")
-        self.offset_entry.bind("<Return>", self._on_offset_enter)
-        self.offset_entry.bind("<FocusOut>", self._on_offset_enter)
-
-        self.offset_dec_btn = ctk.CTkButton(
-            self.offset_frame, text="-", width=30,
-            command=self._on_offset_dec
-        )
-        self.offset_dec_btn.pack(side="left", padx=2)
-
-        self.offset_inc_btn = ctk.CTkButton(
-            self.offset_frame, text="+", width=30,
-            command=self._on_offset_inc
-        )
-        self.offset_inc_btn.pack(side="left", padx=2)
+        _, self.offset_frame, self.offset_entry, \
+            self.offset_dec_btn, self.offset_inc_btn = \
+            self._create_param_row(
+                "Offset", DEFAULT_OFFSET,
+                self._on_offset_enter,
+                self._on_offset_dec, self._on_offset_inc
+            )
 
         # Frequency
-        ctk.CTkLabel(self.sidebar, text="Frequency (Hz)").pack(anchor="w", pady=(5, 2))
-        self.freq_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        self.freq_frame.pack(fill="x", pady=(0, 5))
-
-        self.freq_entry = ctk.CTkEntry(self.freq_frame, width=120)
-        self.freq_entry.pack(side="left", padx=(0, 5))
-        self.freq_entry.insert(0, f"{DEFAULT_FREQ:.1f}")
-        self.freq_entry.bind("<Return>", self._on_freq_enter)
-        self.freq_entry.bind("<FocusOut>", self._on_freq_enter)
-
-        self.freq_dec_btn = ctk.CTkButton(
-            self.freq_frame, text="-", width=30,
-            command=self._on_freq_dec
-        )
-        self.freq_dec_btn.pack(side="left", padx=2)
-
-        self.freq_inc_btn = ctk.CTkButton(
-            self.freq_frame, text="+", width=30,
-            command=self._on_freq_inc
-        )
-        self.freq_inc_btn.pack(side="left", padx=2)
+        _, self.freq_frame, self.freq_entry, \
+            self.freq_dec_btn, self.freq_inc_btn = \
+            self._create_param_row(
+                "Frequency (Hz)", DEFAULT_FREQ,
+                self._on_freq_enter,
+                self._on_freq_dec, self._on_freq_inc
+            )
 
         # Amplitude
-        ctk.CTkLabel(self.sidebar, text="Amplitude").pack(anchor="w", pady=(5, 2))
-        self.amp_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        self.amp_frame.pack(fill="x", pady=(0, 5))
-
-        self.amp_entry = ctk.CTkEntry(self.amp_frame, width=120)
-        self.amp_entry.pack(side="left", padx=(0, 5))
-        self.amp_entry.insert(0, f"{DEFAULT_AMP:.1f}")
-        self.amp_entry.bind("<Return>", self._on_amp_enter)
-        self.amp_entry.bind("<FocusOut>", self._on_amp_enter)
-
-        self.amp_dec_btn = ctk.CTkButton(
-            self.amp_frame, text="-", width=30,
-            command=self._on_amp_dec
-        )
-        self.amp_dec_btn.pack(side="left", padx=2)
-
-        self.amp_inc_btn = ctk.CTkButton(
-            self.amp_frame, text="+", width=30,
-            command=self._on_amp_inc
-        )
-        self.amp_inc_btn.pack(side="left", padx=2)
+        _, self.amp_frame, self.amp_entry, \
+            self.amp_dec_btn, self.amp_inc_btn = \
+            self._create_param_row(
+                "Amplitude", DEFAULT_AMP,
+                self._on_amp_enter,
+                self._on_amp_dec, self._on_amp_inc
+            )
 
         # Duty Cycle (hidden by default, shown for Square waves)
-        self.duty_label = ctk.CTkLabel(self.sidebar, text="Duty Cycle (%)")
-        self.duty_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-
-        self.duty_entry = ctk.CTkEntry(self.duty_frame, width=120)
-        self.duty_entry.pack(side="left", padx=(0, 5))
-        self.duty_entry.insert(0, f"{DEFAULT_DUTY_CYCLE:.1f}")
-        self.duty_entry.bind("<Return>", self._on_duty_enter)
-        self.duty_entry.bind("<FocusOut>", self._on_duty_enter)
-
-        self.duty_dec_btn = ctk.CTkButton(
-            self.duty_frame, text="-", width=30,
-            command=self._on_duty_dec
-        )
-        self.duty_dec_btn.pack(side="left", padx=2)
-
-        self.duty_inc_btn = ctk.CTkButton(
-            self.duty_frame, text="+", width=30,
-            command=self._on_duty_inc
-        )
-        self.duty_inc_btn.pack(side="left", padx=2)
+        self.duty_label, self.duty_frame, self.duty_entry, \
+            self.duty_dec_btn, self.duty_inc_btn = \
+            self._create_param_row(
+                "Duty Cycle (%)", DEFAULT_DUTY_CYCLE,
+                self._on_duty_enter,
+                self._on_duty_dec, self._on_duty_inc,
+                pack=False
+            )
 
         # === Advanced ===
         self._add_section_header("Advanced")
@@ -548,13 +509,13 @@ class WaveformApp(ctk.CTk):
         self.show_rms_env_label.pack(side="left")
 
         # Live cursor state: tracks mouse, click pins a reference
-        self._live_cursor_x: float | None = None
-        self._live_cursor_y: float | None = None
-        self._live_cursor_vline: Any = None
-        self._pinned_cursor_x: float | None = None
-        self._pinned_cursor_vline: Any = None
-        self._highlight_marker: Any = None  # scatter dot on nearest waveform
-        self._highlighted_wf_name: str | None = None  # name of nearest wf
+        self._live_cursor_x: Optional[float] = None
+        self._live_cursor_y: Optional[float] = None
+        self._live_cursor_vline: Optional[Any] = None
+        self._pinned_cursor_x: Optional[float] = None
+        self._pinned_cursor_vline: Optional[Any] = None
+        self._highlight_marker: Optional[Any] = None
+        self._highlighted_wf_name: Optional[str] = None
 
         # === Export ===
         self._add_section_header("Export")
@@ -608,18 +569,58 @@ class WaveformApp(ctk.CTk):
         self.status_bar.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(5, 10))
 
     def _add_section_header(self, text: str):
-        """Add a section header with separator."""
-        # Separator line
+        """Add a yellow section header with a separator line above it."""
         separator = ctk.CTkFrame(self.sidebar, height=1, fg_color=COLOR_SEPARATOR)
         separator.pack(fill="x", pady=(10, 5))
-
-        # Header text
         header = ctk.CTkLabel(
             self.sidebar, text=text,
             text_color=SECTION_HEADER_COLOR,
             font=ctk.CTkFont(weight="bold")
         )
         header.pack(anchor="w")
+
+    def _create_param_row(
+        self,
+        label_text: str,
+        default_val: float,
+        on_enter: Any,
+        on_dec: Any,
+        on_inc: Any,
+        pack: bool = True
+    ) -> Tuple[ctk.CTkLabel, ctk.CTkFrame, ctk.CTkEntry, ctk.CTkButton, ctk.CTkButton]:
+        """Create a parameter input row with label, entry, and +/- buttons.
+
+        Args:
+            label_text: Text for the row label.
+            default_val: Initial entry value.
+            on_enter: Callback for Return/FocusOut on the entry.
+            on_dec: Callback for the minus button.
+            on_inc: Callback for the plus button.
+            pack: Whether to pack the label and frame immediately.
+
+        Returns:
+            Tuple of (label, frame, entry, dec_btn, inc_btn).
+        """
+        label = ctk.CTkLabel(self.sidebar, text=label_text)
+        frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+
+        entry = ctk.CTkEntry(frame, width=120)
+        entry.pack(side="left", padx=(0, 5))
+        entry.insert(0, f"{default_val:.1f}")
+        entry.bind("<Return>", on_enter)
+        entry.bind("<FocusOut>", on_enter)
+
+        dec_btn = ctk.CTkButton(frame, text="-", width=30, command=on_dec)
+        dec_btn.pack(side="left", padx=2)
+
+        inc_btn = ctk.CTkButton(frame, text="+", width=30, command=on_inc)
+        inc_btn.pack(side="left", padx=2)
+
+        if pack:
+            label.pack(anchor="w", pady=(5, 2))
+            frame.pack(fill="x", pady=(0, 5))
+
+        return label, frame, entry, dec_btn, inc_btn
 
     # === Callback Methods ===
 
@@ -659,7 +660,7 @@ class WaveformApp(ctk.CTk):
 
             prompt = f'"{check_name}" is already in use.\nEnter a different name:'
 
-    def _show_wf_context_menu(self, event: tk.Event[Any], wf_id: int):
+    def _show_wf_context_menu(self, event: tk.Event, wf_id: int):
         """Show right-click context menu for a waveform button."""
         menu_style = {
             "bg": COLOR_DARK_BG,
@@ -677,7 +678,7 @@ class WaveformApp(ctk.CTk):
         ctx_menu.bind("<Unmap>", lambda _: ctx_menu.destroy())
         ctx_menu.tk_popup(event.x_root, event.y_root)
 
-    def _show_tooltip(self, event: tk.Event[Any]):
+    def _show_tooltip(self, event: tk.Event):
         """Show tooltip near the cursor."""
         self._hide_tooltip()
         tip = Toplevel(self)
@@ -692,13 +693,13 @@ class WaveformApp(ctk.CTk):
         lbl.pack()
         self._tooltip = tip
 
-    def _hide_tooltip(self, event: tk.Event[Any] | None = None):
+    def _hide_tooltip(self, event: Optional[tk.Event] = None):
         """Destroy the tooltip if it exists."""
         if self._tooltip:
             self._tooltip.destroy()
             self._tooltip = None
 
-    def _on_duration_enter(self, event: tk.Event[Any] | None = None):
+    def _on_duration_enter(self, event: Optional[tk.Event] = None):
         """Handle duration entry."""
         try:
             value = float(self.duration_entry.get())
@@ -803,7 +804,7 @@ class WaveformApp(ctk.CTk):
             self._update_wf_parameters()
             self._update_all_plots()
 
-    def _on_freq_enter(self, event: tk.Event[Any] | None = None):
+    def _on_freq_enter(self, event: Optional[tk.Event] = None):
         """Handle frequency entry."""
         wf = app_state.get_active_wf()
         if wf:
@@ -841,7 +842,7 @@ class WaveformApp(ctk.CTk):
             self._update_freq_btns()
             self._update_all_plots()
 
-    def _on_amp_enter(self, event: tk.Event[Any] | None = None):
+    def _on_amp_enter(self, event: Optional[tk.Event] = None):
         """Handle amplitude entry."""
         wf = app_state.get_active_wf()
         if wf:
@@ -879,7 +880,7 @@ class WaveformApp(ctk.CTk):
             self._update_amp_btns()
             self._update_all_plots()
 
-    def _on_offset_enter(self, event: tk.Event[Any] | None = None):
+    def _on_offset_enter(self, event: Optional[tk.Event] = None):
         """Handle offset entry."""
         wf = app_state.get_active_wf()
         if wf:
@@ -917,7 +918,7 @@ class WaveformApp(ctk.CTk):
             self._update_offset_btns()
             self._update_all_plots()
 
-    def _on_duty_enter(self, event: tk.Event[Any] | None = None):
+    def _on_duty_enter(self, event: Optional[tk.Event] = None):
         """Handle duty cycle entry."""
         wf = app_state.get_active_wf()
         if wf:
@@ -1037,7 +1038,7 @@ class WaveformApp(ctk.CTk):
         self.ax.grid(visible=True, alpha=0.3, color=COLOR_SEPARATOR)
 
         # Generate and plot enabled waveforms
-        wf_data = []
+        wf_data: list[Tuple[np.ndarray, np.ndarray]] = []
         for wf in app_state.wfs:
             if wf.enabled:
                 time, amp = gen_wf(
@@ -1060,37 +1061,12 @@ class WaveformApp(ctk.CTk):
                         label=wf.display_name, linewidth=2
                     )
 
+        # Cache waveform data for cursor proximity checks
+        self._cached_wf_data = wf_data
+
         # Plot envelopes with glow effect
         if app_state.can_show_envelopes() and wf_data:
-            max_env_data = None
-            min_env_data = None
-
-            if app_state.show_max_env:
-                max_env_data = compute_max_env(wf_data)
-                self._plot_glowing_line(
-                    max_env_data[0], max_env_data[1],
-                    COLOR_SUCCESS, 'Max Envelope'
-                )
-
-            if app_state.show_min_env:
-                min_env_data = compute_min_env(wf_data)
-                self._plot_glowing_line(
-                    min_env_data[0], min_env_data[1],
-                    COLOR_ERROR, 'Min Envelope'
-                )
-
-            # Peak-to-Peak fill between max and min
-            if max_env_data is not None and min_env_data is not None:
-                self.ax.fill_between(
-                    max_env_data[0], min_env_data[1], max_env_data[1],
-                    alpha=0.12, color=COLOR_P2P_FILL, label="Peak-to-Peak"
-                )
-
-            if app_state.show_rms_env:
-                time_rms, rms_env = compute_rms_env(wf_data)
-                self._plot_glowing_line(
-                    time_rms, rms_env, COLOR_RMS, 'RMS Envelope'
-                )
+            self._plot_envelopes(wf_data)
 
         # Add legend if there are any lines
         if self.ax.get_lines():
@@ -1105,14 +1081,46 @@ class WaveformApp(ctk.CTk):
         # Update status bar
         self._update_status_bar()
 
+    def _plot_envelopes(self, wf_data: list) -> None:
+        """Plot all enabled envelope lines with glow effects and P2P fill."""
+        max_env_data = None
+        min_env_data = None
+
+        if app_state.show_max_env:
+            max_env_data = compute_max_env(wf_data)
+            self._plot_glowing_line(
+                max_env_data[0], max_env_data[1],
+                COLOR_SUCCESS, 'Max Envelope'
+            )
+
+        if app_state.show_min_env:
+            min_env_data = compute_min_env(wf_data)
+            self._plot_glowing_line(
+                min_env_data[0], min_env_data[1],
+                COLOR_ERROR, 'Min Envelope'
+            )
+
+        # Peak-to-Peak fill between max and min
+        if max_env_data is not None and min_env_data is not None:
+            self.ax.fill_between(
+                max_env_data[0], min_env_data[1], max_env_data[1],
+                alpha=0.12, color=COLOR_P2P_FILL, label="Peak-to-Peak"
+            )
+
+        if app_state.show_rms_env:
+            time_rms, rms_env = compute_rms_env(wf_data)
+            self._plot_glowing_line(
+                time_rms, rms_env, COLOR_RMS, 'RMS Envelope'
+            )
+
     def _plot_glowing_line(self, x: Any, y: Any, color: str, label: str):
-        """Plot a line with a glow effect."""
-        # Outer glow layers (wider, more transparent)
-        self.ax.plot(x, y, color=color, linewidth=8, alpha=0.1)
-        self.ax.plot(x, y, color=color, linewidth=6, alpha=0.2)
-        self.ax.plot(x, y, color=color, linewidth=4, alpha=0.3)
-        # Core line (solid, with label for legend)
-        self.ax.plot(x, y, color=color, linewidth=2, alpha=1.0, label=label)
+        """Plot a line with a glow effect using layered transparency."""
+        for lw, alpha in zip(GLOW_LINEWIDTHS, GLOW_ALPHAS):
+            self.ax.plot(x, y, color=color, linewidth=lw, alpha=alpha)
+        self.ax.plot(
+            x, y, color=color, linewidth=GLOW_CORE_WIDTH,
+            alpha=1.0, label=label
+        )
 
     def _update_wf_list(self):
         """Update the waveform list UI."""
@@ -1328,7 +1336,7 @@ class WaveformApp(ctk.CTk):
 
         # Find nearest waveform for highlight
         nearest = self._find_nearest_wf(event.xdata, event.ydata)
-        cursor_color = '#FFFFFF'
+        cursor_color = COLOR_CURSOR_DEFAULT
         cursor_alpha = 0.5
         cursor_width = 1
 
@@ -1366,31 +1374,26 @@ class WaveformApp(ctk.CTk):
 
     def _find_nearest_wf(
         self, x: float, y: float
-    ) -> tuple[str, float, str] | None:
+    ) -> Optional[Tuple[str, float, str]]:
         """Find the nearest visible line to the mouse position.
 
         Checks envelope lines when visible, individual waveforms otherwise.
         Returns (name, y_value, color_hex) or None if nothing is close.
         """
         y_min, y_max = self.ax.get_ylim()
-        threshold = (y_max - y_min) * 0.04  # 4% of visible Y range
+        threshold = (y_max - y_min) * CURSOR_PROXIMITY_THRESHOLD
 
         best_dist = threshold
         best_result = None
 
-        # Collect enabled waveform data (needed for both modes)
-        wf_data = []
-        for wf in app_state.wfs:
-            if wf.enabled:
-                wf_data.append(gen_wf(
-                    wf.wf_type, wf.freq, wf.amp, wf.offset,
-                    wf.duty_cycle, app_state.duration,
-                    app_state.sample_rate
-                ))
+        # Use cached waveform data from last plot update
+        wf_data = self._cached_wf_data
+        if not wf_data:
+            return None
 
         # Check envelope lines when they're visible
         if app_state.can_show_envelopes() and wf_data:
-            env_candidates: list[tuple[str, float, str]] = []
+            env_candidates: list[Tuple[str, float, str]] = []
 
             if app_state.show_max_env:
                 _, max_env = compute_max_env(wf_data)
@@ -1450,7 +1453,7 @@ class WaveformApp(ctk.CTk):
         # Pin a reference cursor at click position
         self._pinned_cursor_x = event.xdata
         self._pinned_cursor_vline = self.ax.axvline(
-            event.xdata, color='#AAAAAA',
+            event.xdata, color=COLOR_CURSOR_PINNED,
             linestyle='--', linewidth=1, alpha=0.7
         )
 
@@ -1464,13 +1467,13 @@ class WaveformApp(ctk.CTk):
         # Redraw pinned cursor
         if self._pinned_cursor_x is not None:
             self._pinned_cursor_vline = self.ax.axvline(
-                self._pinned_cursor_x, color='#AAAAAA',
+                self._pinned_cursor_x, color=COLOR_CURSOR_PINNED,
                 linestyle='--', linewidth=1, alpha=0.7
             )
         # Redraw live cursor (highlight recalculated on next mouse move)
         if self._live_cursor_x is not None:
             self._live_cursor_vline = self.ax.axvline(
-                self._live_cursor_x, color='#FFFFFF',
+                self._live_cursor_x, color=COLOR_CURSOR_DEFAULT,
                 linestyle='-', linewidth=1, alpha=0.5
             )
 
