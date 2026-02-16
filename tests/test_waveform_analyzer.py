@@ -14,7 +14,7 @@ Maps directly to the Pre-Commit Checklist in CLAUDE.md:
   - No console errors or warnings
   - Performance: envelope <10ms, waveform gen <100ms
 
-Run:  pytest test_waveform_analyzer.py -v
+Run:  pytest tests/ -v
 """
 
 import os

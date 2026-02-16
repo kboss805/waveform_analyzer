@@ -1,0 +1,36 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Virtual environments
+.venv/
+venv_build/
+
+# Build artifacts
+build/
+dist/
+*.spec
+*.exe
+
+# IDE / Editor
+.vscode/
+.idea/
+*.code-workspace
+
+# Pytest
+.pytest_cache/
+
+# Sphinx build output
+docs/_build/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Large binaries
+icon.png
+
+# AI assistant local state (instructions tracked in .claude/)
+CLAUDE.md
