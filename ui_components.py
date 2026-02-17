@@ -427,6 +427,10 @@ class WaveformApp(ctk.CTk):
 
         def on_save():
             try:
+                # Type-safe local variables for validation
+                new_y_min = float(y_min_entry.get())
+                new_y_max = float(y_max_entry.get())
+                
                 new_settings = {
                     "duration": max(DURATION_MIN, min(DURATION_MAX, float(dur_entry.get()))),
                     "waveform_type": type_var.get(),
@@ -435,8 +439,8 @@ class WaveformApp(ctk.CTk):
                     "offset": max(OFFSET_MIN, min(OFFSET_MAX, float(offset_entry.get()))),
                     "duty_cycle": max(DUTY_MIN, min(DUTY_MAX, float(duty_entry.get()))),
                     "y_axis_title": y_title_entry.get().strip() or "Amplitude",
-                    "y_min": float(y_min_entry.get()),
-                    "y_max": float(y_max_entry.get()),
+                    "y_min": new_y_min,
+                    "y_max": new_y_max,
                 }
             except ValueError:
                 status_lbl.configure(
@@ -444,7 +448,8 @@ class WaveformApp(ctk.CTk):
                     text_color=_theme["error"]
                 )
                 return
-            if new_settings["y_min"] >= new_settings["y_max"]:
+            
+            if new_y_min >= new_y_max:
                 status_lbl.configure(
                     text="Y-Axis Min must be less than Max.",
                     text_color=_theme["error"]
@@ -452,8 +457,8 @@ class WaveformApp(ctk.CTk):
                 return
             if save_config(new_settings):
                 # Apply display settings immediately
-                self._plot_y_min = new_settings["y_min"]
-                self._plot_y_max = new_settings["y_max"]
+                self._plot_y_min = new_y_min
+                self._plot_y_max = new_y_max
                 self._plot_y_title = new_settings["y_axis_title"]
                 self._update_all_plots()
                 status_lbl.configure(
@@ -948,7 +953,7 @@ class WaveformApp(ctk.CTk):
             "relief": "flat",
             "borderwidth": 0,
         }
-        ctx_menu = Menu(self, tearoff=0, **menu_style)
+        ctx_menu = Menu(self, tearoff=0, **menu_style) # type: ignore
         ctx_menu.add_command(
             label="Rename...",
             command=lambda: self._on_rename_wf(wf_id)
@@ -1675,11 +1680,12 @@ class WaveformApp(ctk.CTk):
                 xy=(event.xdata, wf_y),
                 xytext=(12, 12), textcoords='offset points',
                 fontsize=8, color=_theme["text"],
-                bbox=dict(
-                    boxstyle='round,pad=0.3',
-                    facecolor=_theme["plot_bg"], edgecolor=wf_color,
-                    alpha=0.85
-                ),
+                bbox={
+                    'boxstyle': 'round,pad=0.3',
+                    'facecolor': _theme["plot_bg"], 
+                    'edgecolor': wf_color,
+                    'alpha': 0.85
+                },
                 zorder=11
             )
         else:
@@ -1821,11 +1827,12 @@ class WaveformApp(ctk.CTk):
             xytext=(12, -12), textcoords='offset points',
             fontsize=8, color=_theme["text"],
             verticalalignment='top',
-            bbox=dict(
-                boxstyle='round,pad=0.3',
-                facecolor=_theme["plot_bg"], edgecolor=edge_color,
-                alpha=0.85
-            ),
+            bbox={
+                'boxstyle': 'round,pad=0.3',
+                'facecolor': _theme["plot_bg"], 
+                'edgecolor': edge_color,
+                'alpha': 0.85
+            },
             zorder=11
         )
 
